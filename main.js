@@ -78,7 +78,7 @@ var ASSETS = {
   // 画像
   image: {
     'wall': 'https://cdn.jsdelivr.net/gh/alkn203/tomapiko-void@master/assets/wall.png',
-    'tile': 'https://cdn.jsdelivr.net/gh/alkn203/tomapiko-void@master/assets/tile.png',
+    'floor': 'https://cdn.jsdelivr.net/gh/alkn203/tomapiko-void@master/assets/floor.png',
     'tomapiko': 'https://cdn.jsdelivr.net/gh/phinajs/phina.js@develop/assets/images/tomapiko_ss.png',
   },
   // スプライトシート
@@ -102,17 +102,55 @@ phina.define("MainScene", {
     this.gy = Grid(960, 15);
     // 背景色
     this.backgroundColor = '#2e8b57';
-    // 静的オブジェクトグループ
-    this.staticGroup = DisplayElement().addChildTo(this);
+    // 左の壁
+    this.leftwallGroup = DisplayElement().addChildTo(this);
+    // 右の壁
+    this.rightwallGroup = DisplayElement().addChildTo(this);
+    //
+    this.createWalls();
     
-    Wall().addChildTo(this.staticGroup).setPosition(320, 480);
+    var player = Player().addChildTo(this);
+    player.x = this.gx.center() + GRID_HALF;
+    player.y = this.gy.span(3) + GRID_HALF;
+
+  },
+  //
+  createWalls: function() {
+    var self = this;
+    // 左側の壁を2つ作って縦につなげる
+    (2).times(function() {
+      var wall = Wall().addChildTo(self.leftwallGroup);
+      wall.left = 0;
+    });
     
-    
+    var leftChildren = this.leftwallGroup.children;
+    leftChildren.first.y = this.gy.center();
+    leftChildren.last.top = leftChildren.first.bottom;
+    // 右側の壁を2つ作って縦につなげる
+    (2).times(function() {
+      var wall = Wall().addChildTo(self.rightwallGroup);
+      wall.right = self.gx.width;
+    });
+    var rightChildren = this.rightwallGroup.children;
+    rightChildren.first.y = this.gy.center();
+    rightChildren.last.top = rightChildren.first.bottom;
   },
   // 毎フレーム処理  
   update: function(app) {
-
+    //
+    this.moveWalls();
   },
+  //
+  moveWalls: function() {
+    //
+    this.leftwallGroup.children.each(function(wall) {
+      //wall.y -= 4;
+    });
+    this.rightwallGroup.children.each(function(wall) {
+      //wall.y -= 4;
+    });
+  }
+  
 });
 /*
  * プレイヤークラス
@@ -152,17 +190,15 @@ phina.define("Wall", {
   },
 });
 /*
- * ブロッククラス
+ * 床クラス
  */
-phina.define("Block", {
+phina.define("Floor", {
   // 継承
   superClass: 'Sprite',
   // コンストラクタ
   init: function() {
     // 親クラス初期化
-    this.superInit('tile', GRID_SIZE, GRID_SIZE);
-    // フレームインデックス指定
-    this.frameIndex = 1;
+    this.superInit('floor');
   },
 });
 /*
