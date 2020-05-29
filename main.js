@@ -1,78 +1,5 @@
 // グローバルに展開
 phina.globalize();
-// スプライトシート
-var SPRITE_SHEET = {
-  "tomapiko_ss": {
-    // フレーム情報
-    "frame": {
-      // 1フレームの画像サイズ（横）
-      "width": 64,
-      // 1フレームの画像サイズ（縦）
-      "height": 64,
-      // フレーム数（横）
-      "cols": 6,
-      // フレーム数（縦）
-      "rows": 3,
-    },
-    // アニメーション情報
-    "animations": {
-      // アニメーション名
-      "left": {
-        // フレーム番号範囲
-        "frames": [12,13,14],
-        // 次のアニメーション
-        "next": "left",
-        // アニメーション間隔
-        "frequency": 4,
-      },
-      "right": { 
-        "frames": [15,16,17], 
-        "next": "right", 
-        "frequency": 4, 
-      },
-      "up": { 
-        "frames": [9,10,11], 
-        "next": "up", 
-        "frequency": 4, 
-      },
-      "down": { 
-        "frames": [6,7,8], 
-        "next": "down",
-        "frequency": 4,
-      },
-      "defeat": { 
-        "frames": [4,5], 
-        "frequency": 8,
-      },
-    }
-  },
-  // 爆発
-  "explosions": {
-    "frame": {
-      "width": 64,
-      "height": 64,
-      "cols": 9,
-      "rows": 1,
-    },
-    "animations": {
-      // 中心
-      "center": {
-        "frames": [0,1,2],
-        "frequency": 4,
-      },
-      // 途中
-      "middle": {
-        "frames": [3,4,5],
-        "frequency": 4,
-      },
-      // 端
-      "edge": {
-        "frames": [6,7,8],
-        "frequency": 4,
-      },
-    }
-  },
-};
 // アセット
 var ASSETS = {
   // 画像
@@ -82,11 +9,15 @@ var ASSETS = {
     'tomapiko': 'https://cdn.jsdelivr.net/gh/phinajs/phina.js@develop/assets/images/tomapiko_ss.png',
   },
   // スプライトシート
-  spritesheet: SPRITE_SHEET
+  spritesheet: {
+    'tomapiko_ss': 'https://cdn.jsdelivr.net/gh/phinajs/phina.js@develop/assets/tmss/tomapiko.tmss',
+  },
 };
 // 定数
-var GRID_SIZE = 64;
-var GRID_HALF = GRID_SIZE / 2;
+var GRID_SIZE     = 64;
+var GRID_HALF     = GRID_SIZE / 2;
+var GRAVITY       = 9.8 / 18; // 重力
+var PLAYER_SPEED  = 4;
 /*
  * メインシーン
  */
@@ -102,6 +33,8 @@ phina.define("MainScene", {
     this.gy = Grid(960, 15);
     // 背景色
     this.backgroundColor = '#2e8b57';
+    // 床
+    this.floorGroup = DisplayElement().addChildTo(this);
     // 左の壁
     this.leftwallGroup = DisplayElement().addChildTo(this);
     // 右の壁
@@ -109,9 +42,11 @@ phina.define("MainScene", {
     //
     this.createWalls();
     
-    var player = Player().addChildTo(this);
-    player.x = this.gx.center() + GRID_HALF;
-    player.y = this.gy.span(3) + GRID_HALF;
+    this.player = Player().addChildTo(this);
+    this.player.x = this.gx.center() + GRID_HALF;
+    this.player.y = this.gy.span(3) + GRID_HALF;
+    
+    Floor().addChildTo(this.floorGroup).setPosition(this.gx.center(), this.gy.span(4) + GRID_HALF);
 
   },
   //
@@ -139,6 +74,92 @@ phina.define("MainScene", {
   update: function(app) {
     //
     this.moveWalls();
+    this.player.moveX();
+    this.collisionX();
+    this.checkVerticalState(app);
+  },
+  // 縦方向の状態チェック
+  checkVerticalState: function(app) {
+    var player = this.player;
+    var state = this.player.verticalState;
+    var p = app.pointer;
+    // プレイヤーの状態で分ける
+    switch (state) {
+      // 立っている
+      case 'STANDING':
+        // タッチ開始
+        if (p.getPointingStart()) {
+          player.reflectX();
+        }
+        else {
+          if (!this.collisionY()) {
+            player.moveY();
+            player.verticalState = 'FALLING';
+          }
+        }
+        break;
+      // ジャンプ中
+      case 'JUMPING':
+        // 落下
+        if (player.vy > 0) {
+          player.verticalState = 'FALLING';
+        }
+        else {
+          player.moveY();
+        }
+        break;
+      // 落下中  
+      case 'FALLING':
+        // ヒットしたら立たせる
+        if (this.collisionY()) {
+          player.vy = 0;
+          player.verticalState = 'STANDING';
+          player.anim.gotoAndPlay('left');
+        }
+        else {
+          player.moveY();
+        }
+        break;
+    }    
+  },
+  // 横方向の当たり判定
+  collisionX: function() {
+    var player = this.player;
+    var vx = player.vx;
+    // 当たり判定用の矩形
+    var rect = Rect(player.left + vx, player.top, player.width, player.height);
+    //
+    if (rect.left < GRID_SIZE) {
+      player.left = GRID_SIZE;
+      player.reflectX();
+    }
+    //
+    var edgeR = this.gx.width - GRID_SIZE;
+    if (rect.right > edgeR) {
+      player.right = edgeR;
+      player.reflectX();
+    }
+  },
+  // 縦方向の当たり判定
+  collisionY: function() {
+    var player = this.player;
+    // 床に乗っている場合は強引に当たり判定を作る
+    var vy = player.vy === 0 ? 4: player.vy;
+    // 当たり判定用の矩形
+    var rect = Rect(player.left, player.top + vy, player.width, player.height);
+    var result = false;
+    // ブロックグループをループ
+    this.floorGroup.children.some(function(obj) {
+      // ブロックとのあたり判定
+      if (Collision.testRectRect(rect, obj)) {
+        // 上から
+        if (rect.y < obj.y) player.bottom = obj.top;
+        
+        result = true;
+        return true;
+      }
+    });
+    return result;
   },
   //
   moveWalls: function() {
@@ -165,16 +186,31 @@ phina.define("Player", {
     // スプライトにフレームアニメーションをアタッチ
     this.anim = FrameAnimation('tomapiko_ss').attachTo(this);
     // アニメーションを指定
-    this.anim.gotoAndStop('right');
-    // 移動速度
-    this.speed = 4;
+    this.anim.gotoAndPlay('left');
     //
-    this.defeated = false;
-    // やられイベント
-    this.one('defeat', function() {
-      this.defeated = true;
-      this.anim.gotoAndPlay('defeat');
-    }, this);
+    this.scaleX *= -1;
+    // 横移動速度
+    this.vx = PLAYER_SPEED;
+    // 縦移動速度
+    this.vy = 0;
+    // 横方向の状態
+    this.horizontalState = 'MOVING_RIGHT';
+    // 縦方向の状態
+    this.verticalState = 'FALLING';
+  },
+  // 横方向移動
+  moveX: function() {
+    this.x += this.vx;
+  },
+  // 縦方向移動
+  moveY: function() {
+    this.vy += GRAVITY;
+    this.y += this.vy;
+  },
+  // 反転処理
+  reflectX: function() {
+    this.vx *= -1;
+    this.scaleX *= -1;
   },
 });
 /*
