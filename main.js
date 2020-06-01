@@ -33,24 +33,23 @@ phina.define("MainScene", {
     this.gy = Grid(960, 15);
     // 背景色
     this.backgroundColor = '#2e8b57';
+    // グループ
     // 床
     this.floorGroup = DisplayElement().addChildTo(this);
     // 左の壁
     this.leftwallGroup = DisplayElement().addChildTo(this);
     // 右の壁
     this.rightwallGroup = DisplayElement().addChildTo(this);
-    //
+    // 左右の壁作成
     this.createWalls();
-    
-    this.player = Player().addChildTo(this);
-    this.player.x = this.gx.center() + GRID_HALF;
-    this.player.y = this.gy.span(3) + GRID_HALF;
-    
-    var floor = Floor().addChildTo(this.floorGroup);
-    floor.setPosition(this.gx.center(3), this.gy.span(4) + GRID_HALF);
-    var floor2 = Floor().addChildTo(this.floorGroup);
-    floor2.setPosition(this.gx.center(-3), this.gy.span(8) + GRID_HALF);
+    // 初期の床作成
+    this.createFloors();
+    // プレイヤー作成
+    var player = Player().addChildTo(this);
+    player.x = this.gx.center(2) + GRID_HALF;
+    player.y = this.gy.span(3) + GRID_HALF;
 
+    this.player = player;
   },
   //
   createWalls: function() {
@@ -73,12 +72,57 @@ phina.define("MainScene", {
     rightChildren.first.y = this.gy.center();
     rightChildren.last.top = rightChildren.first.bottom;
   },
+  // 初期の床作成
+  createFloors: function() {
+    var arr = [[3,4],[-3,8],[3,12],[-3,16],[3,20]];
+    var self = this;
+    
+    arr.each(function(elem) {
+      var floor = Floor().addChildTo(self.floorGroup);
+      floor.x = self.gx.center(elem[0]);
+      floor.y = elem[1] * GRID_SIZE + GRID_HALF;
+    });
+  },
   // 毎フレーム処理  
   update: function(app) {
     //
     this.player.moveX();
     this.collisionX();
     this.checkVerticalState(app);
+    this.loopFloors();
+    this.loopWalls();
+  },
+  // 床をループで作り出す
+  loopFloors: function() {
+    var group = this.floorGroup;
+    //
+    if (group.children.first.bottom < 0) {
+      // 最後の床の位置を記憶
+      var pos = group.children.last.position; 
+      //
+      group.children.first.addChildTo(group);
+      //
+      var span = pos.x < this.gx.center() ? 3 : -3;
+      group.children.last.x = this.gx.center(span);
+      group.children.last.y = pos.y + GRID_SIZE * 4;
+    }
+  },
+  // 壁をループさせる
+  loopWalls: function() {
+    var lGroup = this.leftwallGroup;
+    var rGroup = this.rightwallGroup;
+    //
+    if (lGroup.children.last.y < this.gy.center()) {
+      lGroup.children.first.addChildTo(lGroup);
+      lGroup.children.last.x = lGroup.children.first.x;
+      lGroup.children.last.top = lGroup.children.first.bottom;
+    }
+    //
+    if (rGroup.children.last.y < this.gy.center()) {
+      rGroup.children.first.addChildTo(rGroup);
+      rGroup.children.last.x = rGroup.children.first.x;
+      rGroup.children.last.top = rGroup.children.first.bottom;
+    }
   },
   // 縦方向の状態チェック
   checkVerticalState: function(app) {
@@ -193,10 +237,8 @@ phina.define("Player", {
     this.anim = FrameAnimation('tomapiko_ss').attachTo(this);
     // アニメーションを指定
     this.anim.gotoAndPlay('left');
-    // 画像反転
-    this.scaleX *= -1;
     // 横移動速度
-    this.vx = PLAYER_SPEED;
+    this.vx = -PLAYER_SPEED;
     // 縦方向の状態
     this.verticalState = 'FALLING';
   },
